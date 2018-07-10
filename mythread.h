@@ -1,11 +1,25 @@
 #ifndef MYTHREAD_H
 #define MYTHREAD_H
+#include <QUdpSocket>
+#include <QHostAddress>
+#include <QThread>
+#include "plotter.h"
 
-
-class MyThread
+class MyThread : public QThread
 {
+    Q_OBJECT
+
+private:
+    Plotter* m_plotter;
+    void run();
 public:
-    MyThread();
+    MyThread(Plotter* plotter, QWidget* parent = 0);
+    ~MyThread();
+
+signals:
+    void status(Frame* dw);
 };
+
+extern bool runApp;
 
 #endif // MYTHREAD_H

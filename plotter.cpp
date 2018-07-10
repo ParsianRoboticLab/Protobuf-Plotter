@@ -21,10 +21,10 @@
 #include "leaffilterproxymodel.h"
 #include "plotter.h"
 #include "plot.h"
-#include "../guitimer.h"
+#include "guitimer.h"
 #include "ui_plotter.h"
 #include "google/protobuf/descriptor.h"
-#include "protobuf/status.pb.h"
+#include "proto/cpp/messages_parsian_simurosot_worldmodel.pb.h"
 #include <cmath>
 #include <QComboBox>
 #include <QMenu>
@@ -52,12 +52,7 @@ Plotter::Plotter() :
     // root items in the plotter
     addRootItem(QStringLiteral("Ball"), QStringLiteral("Ball"));
     addRootItem(QStringLiteral("Yellow"), QStringLiteral("Yellow robots"));
-    addRootItem(QStringLiteral("YellowStrategy"), QStringLiteral("Yellow strategy"));
     addRootItem(QStringLiteral("Blue"), QStringLiteral("Blue robots"));
-    addRootItem(QStringLiteral("BlueStrategy"), QStringLiteral("Blue strategy"));
-    addRootItem(QStringLiteral("RadioCommand"), QStringLiteral("Radio commands"));
-    addRootItem(QStringLiteral("RadioResponse"), QStringLiteral("Radio responses"));
-    addRootItem(QStringLiteral("Timing"), QStringLiteral("Timing"));
 
     ui->tree->expandAll(); // expands the root items, thus childs are immediatelly visible once added
     connect(&m_model, SIGNAL(itemChanged(QStandardItem*)), SLOT(itemChanged(QStandardItem*)));
@@ -104,6 +99,7 @@ Plotter::Plotter() :
     connect(m_guiTimer, &GuiTimer::timeout, this, &Plotter::invalidatePlots);
 
     loadSelection();
+    cnt = 0;
 }
 
 Plotter::~Plotter()
@@ -224,8 +220,9 @@ void Plotter::setFreeze(bool freeze)
     ui->btnFreeze->setChecked(freeze); // update button
 }
 
-void Plotter::handleStatus(const Status &status)
+void Plotter::handleStatus(Frame*_status)
 {
+    const Frame status(*_status);
     // don't consume cpu while closed
     if (!isVisible()) {
         return;
@@ -233,91 +230,57 @@ void Plotter::handleStatus(const Status &status)
 
     m_guiTimer->requestTriggering();
 
-    m_time = status->time();
+    m_time = cnt++;//status.header().seq();
     // normalize time to be able to store it in floats
     if (m_startTime == 0) {
-        m_startTime = status->time();
+        m_startTime = m_time;
     }
-
-    const float time = (status->time() - m_startTime) / 1E9;
 
     // handle each message
-    if (status->has_world_state()) {
-        const world::State &worldState = status->world_state();
-        float time = (worldState.time() - m_startTime) / 1E9;
+//    if (status.has_detection()) {
+//        const Frame& raw = status.detection();
+        if (status.has_ball()) {
+            parseMessage(status.ball(), QStringLiteral("Ball.raw"), m_time);
 
-        if (worldState.has_ball()) {
-            parseMessage(worldState.ball(), QStringLiteral("Ball"), time);
-
-            for (int i = 0; i < worldState.ball().raw_size(); i++) {
-                const world::BallPosition &p = worldState.ball().raw(i);
-                parseMessage(p, QStringLiteral("Ball.raw"), (p.time() - m_startTime) / 1E9);
-            }
         }
 
-        for (int i = 0; i < worldState.yellow_size(); i++) {
-            const world::Robot &robot = worldState.yellow(i);
-            parseMessage(robot, QString(QStringLiteral("Yellow.%1")).arg(robot.id()), time);
-
+        for (int i = 0; i < status.robots_yellow_size(); i++) {
+            const RRobot& robot = status.robots_yellow(i);
             const QString rawParent = QString(QStringLiteral("Yellow.%1.raw")).arg(robot.id());
-            for (int i = 0; i < robot.raw_size(); i++) {
-                const world::RobotPosition &p = robot.raw(i);
-                parseMessage(p, rawParent, (p.time() - m_startTime) / 1E9);
-            }
+            parseMessage(robot, rawParent, m_time);
         }
 
-        for (int i = 0; i < worldState.blue_size(); i++) {
-            const world::Robot &robot = worldState.blue(i);
-            parseMessage(robot, QString(QStringLiteral("Blue.%1")).arg(robot.id()), time);
-
+        for (int i = 0; i < status.robots_blue_size(); i++) {
+            const RRobot& robot = status.robots_yellow(i);
             const QString rawParent = QString(QStringLiteral("Blue.%1.raw")).arg(robot.id());
-            for (int i = 0; i < robot.raw_size(); i++) {
-                const world::RobotPosition &p = robot.raw(i);
-                parseMessage(p, rawParent, (p.time() - m_startTime) / 1E9);
-            }
+            parseMessage(robot, rawParent, m_time);
         }
+//    }
 
-        for (int i = 0; i < worldState.radio_response_size(); i++) {
-            const robot::RadioResponse &response = worldState.radio_response(i);
-            const QString name = QString(QStringLiteral("%1-%2")).arg(response.generation()).arg(response.id());
-            const float responseTime = (response.time() - m_startTime) / 1E9;
-            parseMessage(response, QString(QStringLiteral("RadioResponse.%1")).arg(name), responseTime);
-            parseMessage(response.estimated_speed(), QString(QStringLiteral("RadioResponse.%1.estimatedSpeed")).arg(name), responseTime);
-        }
-    }
 
-    for (int i = 0; i < status->radio_command_size(); i++) {
-        const robot::RadioCommand &command = status->radio_command(i);
-        const QString name = QString(QStringLiteral("%1-%2")).arg(command.generation()).arg(command.id());
+//    if (status.has_worldmodel()) {
+//        const WorldModel &wm = status.worldmodel();
+//        if (wm.has_ball()) {
+//            parseMessage(wm.ball(), QStringLiteral("Ball"), m_time);
 
-        const robot::Command &cmd = command.command();
-        parseMessage(cmd, QString(QStringLiteral("RadioCommand.%1")).arg(name), time);
-        parseMessage(cmd.debug(), QString(QStringLiteral("RadioCommand.%1.debug")).arg(name), time);
-    }
+//        }
 
-    if (status->has_timing()) {
-        const amun::Timing &timing = status->timing();
-        parseMessage(timing, QStringLiteral("Timing"), time);
-    }
 
-    if (status->has_debug()) {
-        const amun::DebugValues &debug = status->debug();
-        // ignore controller as it can create plots via RadioCommand.%1.debug
-        if (debug.source() != amun::Controller) {
-            QVector<QStandardItem *> emptyLookup;
-            const QString parent = (debug.source() == amun::StrategyBlue) ?
-                        QStringLiteral("BlueStrategy") : QStringLiteral("YellowStrategy");
-            // strategies can add plots with arbitrary names
-            for (int i = 0; i < debug.plot_size(); ++i) {
-                const amun::PlotValue &value = debug.plot(i);
-                addPoint(value.name(), parent, time, value.value(), emptyLookup, 0);
-            }
-        }
-    }
+//        for (int i = 0; i < wm.our_robots_size(); i++) {
+//            const MovingObject &robot = wm.our_robots(i);
+//            parseMessage(robot, QString(QStringLiteral("Our.%1")).arg(robot.id()), m_time);
+//        }
+
+//        for (int i = 0; i < wm.opp_robots_size(); i++) {
+//            const MovingObject &robot = wm.opp_robots(i);
+//            parseMessage(robot, QString(QStringLiteral("Opp.%1")).arg(robot.id()), m_time);
+//        }
+
+//    }
 
     // don't move plots during freeze
     if (!m_freeze) {
-        ui->widget->update(time);
+        ui->widget->update(m_time);
     }
 }
 
@@ -413,16 +376,18 @@ void Plotter::parseMessage(const google::protobuf::Message &message, const QStri
 
         // check type and that the field exists
         if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_FLOAT
-                && refl->HasField(message, field)) {
+                && refl->HasField(message, field)
+                ) {
             const std::string &name = field->name();
-            const float value = refl->GetFloat(message, field);
+            const float value = refl->GetFloat(message, field) / 100;
             if (fieldNameMap.count(name) > 0) {
                 SpecialFieldNames fn = fieldNameMap.at(name);
-                specialFields[static_cast<int>(fn)] = value;
+                specialFields[static_cast<int>(fn)] = value; // MAHI / 100
             }
             addPoint(name, parent, time, value, childLookup, i);
         } else if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_BOOL
-                   && refl->HasField(message, field)) {
+                   && refl->HasField(message, field)
+                   ) {
             const std::string &name = field->name();
             const float value = refl->GetBool(message,field) ? 1 : 0;
             addPoint(name, parent, time, value, childLookup, i);

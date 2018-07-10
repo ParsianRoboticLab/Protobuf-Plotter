@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui opengl
+QT       += core gui opengl network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -24,7 +24,8 @@ SOURCES += main.cpp\
     proto/cpp/messages_parsian_simurosot_data_wrapper.pb.cc \
     proto/cpp/messages_parsian_simurosot_debugs.pb.cc \
     proto/cpp/messages_parsian_simurosot_detection.pb.cc \
-    proto/cpp/messages_parsian_simurosot_worldmodel.pb.cc
+    proto/cpp/messages_parsian_simurosot_worldmodel.pb.cc \
+    mythread.cpp
 
 HEADERS  += mainwindow.h \
     plot.h \
@@ -37,7 +38,8 @@ HEADERS  += mainwindow.h \
     proto/cpp/messages_parsian_simurosot_data_wrapper.pb.h \
     proto/cpp/messages_parsian_simurosot_debugs.pb.h \
     proto/cpp/messages_parsian_simurosot_detection.pb.h \
-    proto/cpp/messages_parsian_simurosot_worldmodel.pb.h
+    proto/cpp/messages_parsian_simurosot_worldmodel.pb.h \
+    mythread.h
 
 FORMS    += \
     plotter.ui
@@ -45,3 +47,9 @@ FORMS    += \
 RESOURCES +=
 
 DISTFILES +=
+
+
+INCLUDEPATH+=proto/cpp
+INCLUDEPATH+=/usr/local/Cellar/protobuf/3.6.0/include
+LIBS+=-L/usr/local/Cellar/protobuf/3.6.0/lib/ -lprotobuf -lprotobuf-lite
+

@@ -21,8 +21,7 @@
 #ifndef PLOTTER_H
 #define PLOTTER_H
 
-#include "protobuf/status.h"
-#include "protobuf/world.pb.h"
+#include "proto/cpp/messages_parsian_simurosot_data_wrapper.pb.h"
 #include <QDialog>
 #include <QSet>
 #include <QStandardItemModel>
@@ -45,7 +44,7 @@ public:
 
 public slots:
     void setScaling(float min, float max, float timespan);
-    void handleStatus(const Status &status);
+    void handleStatus(Frame *status);
     void clearData();
 
 signals:
@@ -94,6 +93,7 @@ private:
     QStandardItemModel m_model;
     LeafFilterProxyModel *m_proxy;
     QMenu *m_plotMenu;
+    int cnt;
 };
 
 #endif // PLOTTER_H
