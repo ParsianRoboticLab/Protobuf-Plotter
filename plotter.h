@@ -26,6 +26,8 @@
 #include <QSet>
 #include <QStandardItemModel>
 
+#define MSG WorldModel
+
 class LeafFilterProxyModel;
 class Plot;
 class GuiTimer;
@@ -44,7 +46,7 @@ public:
 
 public slots:
     void setScaling(float min, float max, float timespan);
-    void handleStatus(Frame *status);
+    void handleStatus(WorldModel *status);
     void clearData();
 
 signals:

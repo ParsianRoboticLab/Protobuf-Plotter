@@ -17,7 +17,7 @@ public:
     ~MyThread();
 
 signals:
-    void status(Frame* dw);
+    void status(WorldModel* dw);
 };
 
 extern bool runApp;

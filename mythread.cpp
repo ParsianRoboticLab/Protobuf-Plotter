@@ -2,7 +2,7 @@
 
 MyThread::MyThread(Plotter *plotter, QWidget *parent)
 {
-    connect(this, SIGNAL(status(Frame*)), plotter, SLOT(handleStatus(Frame*)));
+    connect(this, SIGNAL(status(WorldModel*)), plotter, SLOT(handleStatus(WorldModel*)));
 }
 
 MyThread::~MyThread() {
@@ -12,20 +12,20 @@ MyThread::~MyThread() {
 void MyThread::run()
 {
     QUdpSocket* socket = new QUdpSocket();
-    socket->bind(QHostAddress("192.168.43.105"), 10020, QUdpSocket::ShareAddress);
+    socket->bind(QHostAddress("172.21.232.219"), 10040, QUdpSocket::ShareAddress);
 //    socket->joinMulticastGroup(QHostAddress("224.5.23.2"));
     while(runApp) {
         while (socket->hasPendingDatagrams()) {
-            Frame* head = new Frame;
+            WorldModel* head = new WorldModel;
             QByteArray Buffer;
             Buffer.resize(socket->pendingDatagramSize());
             QHostAddress sender;
             quint16 senderPort;
             socket->readDatagram(Buffer.data(),Buffer.size(),&sender,&senderPort);
-            if (head->ParsePartialFromArray(Buffer.data(), Buffer.size())) {
+            if (head->ParseFromArray(Buffer.data(), Buffer.size())) {
                 emit status(head);
             } else {
-                qDebug() << "FAILED TO PARSE";
+                qDebug() << "FAILED TO PARSE" << Buffer.size();
             }
         }
         msleep(100);

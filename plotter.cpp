@@ -220,9 +220,9 @@ void Plotter::setFreeze(bool freeze)
     ui->btnFreeze->setChecked(freeze); // update button
 }
 
-void Plotter::handleStatus(Frame*_status)
+void Plotter::handleStatus(WorldModel *_status)
 {
-    const Frame status(*_status);
+    const WorldModel wm(*_status);
     // don't consume cpu while closed
     if (!isVisible()) {
         return;
@@ -237,46 +237,45 @@ void Plotter::handleStatus(Frame*_status)
     }
 
     // handle each message
-//    if (status.has_detection()) {
-//        const Frame& raw = status.detection();
-        if (status.has_ball()) {
-            parseMessage(status.ball(), QStringLiteral("Ball.raw"), m_time);
+    //    if (status.has_detection()) {
+    //        const Frame& raw = status.detection();
+    //        if (status.has_ball()) {
+    //            parseMessage(status.ball(), QStringLiteral("Ball.raw"), m_time);
 
-        }
+    //        }
 
-        for (int i = 0; i < status.robots_yellow_size(); i++) {
-            const RRobot& robot = status.robots_yellow(i);
-            const QString rawParent = QString(QStringLiteral("Yellow.%1.raw")).arg(robot.id());
-            parseMessage(robot, rawParent, m_time);
-        }
+    //        for (int i = 0; i < status.robots_yellow_size(); i++) {
+    //            const RRobot& robot = status.robots_yellow(i);
+    //            const QString rawParent = QString(QStringLiteral("Yellow.%1.raw")).arg(robot.id());
+    //            parseMessage(robot, rawParent, m_time);
+    //        }
 
-        for (int i = 0; i < status.robots_blue_size(); i++) {
-            const RRobot& robot = status.robots_yellow(i);
-            const QString rawParent = QString(QStringLiteral("Blue.%1.raw")).arg(robot.id());
-            parseMessage(robot, rawParent, m_time);
-        }
-//    }
-
-
-//    if (status.has_worldmodel()) {
-//        const WorldModel &wm = status.worldmodel();
-//        if (wm.has_ball()) {
-//            parseMessage(wm.ball(), QStringLiteral("Ball"), m_time);
-
-//        }
+    //        for (int i = 0; i < status.robots_blue_size(); i++) {
+    //            const RRobot& robot = status.robots_yellow(i);
+    //            const QString rawParent = QString(QStringLiteral("Blue.%1.raw")).arg(robot.id());
+    //            parseMessage(robot, rawParent, m_time);
+    //        }
+    //    }
 
 
-//        for (int i = 0; i < wm.our_robots_size(); i++) {
-//            const MovingObject &robot = wm.our_robots(i);
-//            parseMessage(robot, QString(QStringLiteral("Our.%1")).arg(robot.id()), m_time);
-//        }
+    //    if (status.has_worldmodel()) {
+    //        const WorldModel &wm = status.worldmodel();
+    if (wm.has_ball()) {
+        parseMessage(wm.ball(), QStringLiteral("Ball"), m_time);
 
-//        for (int i = 0; i < wm.opp_robots_size(); i++) {
-//            const MovingObject &robot = wm.opp_robots(i);
-//            parseMessage(robot, QString(QStringLiteral("Opp.%1")).arg(robot.id()), m_time);
-//        }
+    }
 
-//    }
+    for (int i = 0; i < wm.our_robots_size(); i++) {
+        const MovingObject &robot = wm.our_robots(i);
+        parseMessage(robot, QString(QStringLiteral("Our.%1")).arg(robot.id()), m_time);
+    }
+
+    for (int i = 0; i < wm.opp_robots_size(); i++) {
+        const MovingObject &robot = wm.opp_robots(i);
+        parseMessage(robot, QString(QStringLiteral("Opp.%1")).arg(robot.id()), m_time);
+    }
+
+    //    }
 
     // don't move plots during freeze
     if (!m_freeze) {
@@ -344,8 +343,8 @@ enum class SpecialFieldNames: int {
 };
 
 static const std::unordered_map<std::string, SpecialFieldNames> fieldNameMap = {
-    std::make_pair("v_f", SpecialFieldNames::v_f),
-    std::make_pair("v_s", SpecialFieldNames::v_s),
+    std::make_pair("x", SpecialFieldNames::v_f),
+    std::make_pair("y", SpecialFieldNames::v_s),
     std::make_pair("v_x", SpecialFieldNames::v_x),
     std::make_pair("v_y", SpecialFieldNames::v_y),
     std::make_pair("v_desired_x", SpecialFieldNames::v_d_x),
@@ -379,10 +378,10 @@ void Plotter::parseMessage(const google::protobuf::Message &message, const QStri
                 && refl->HasField(message, field)
                 ) {
             const std::string &name = field->name();
-            const float value = refl->GetFloat(message, field) / 100;
+            const float value = refl->GetFloat(message, field); // MAHI / 100
             if (fieldNameMap.count(name) > 0) {
                 SpecialFieldNames fn = fieldNameMap.at(name);
-                specialFields[static_cast<int>(fn)] = value; // MAHI / 100
+                specialFields[static_cast<int>(fn)] = value;
             }
             addPoint(name, parent, time, value, childLookup, i);
         } else if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_BOOL
@@ -391,6 +390,10 @@ void Plotter::parseMessage(const google::protobuf::Message &message, const QStri
             const std::string &name = field->name();
             const float value = refl->GetBool(message,field) ? 1 : 0;
             addPoint(name, parent, time, value, childLookup, i);
+        } else if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE
+                   && refl->HasField(message, field)
+                   ) {
+            parseMessage(refl->GetMessage(message, field), QString("%1.%2").arg(parent).arg(field->name().c_str()), time);
         }
     }
 
@@ -403,20 +406,20 @@ void Plotter::parseMessage(const google::protobuf::Message &message, const QStri
     // add length of speed vectors
     tryAddLength(staticVLocal, parent, time,
                  specialFields[static_cast<int>(SpecialFieldNames::v_f)],
-                 specialFields[static_cast<int>(SpecialFieldNames::v_s)],
-                 childLookup, desc->field_count()+0);
+            specialFields[static_cast<int>(SpecialFieldNames::v_s)],
+            childLookup, desc->field_count()+0);
     tryAddLength(staticVDesired, parent, time,
                  specialFields[static_cast<int>(SpecialFieldNames::v_d_x)],
-                 specialFields[static_cast<int>(SpecialFieldNames::v_d_y)],
-                 childLookup, desc->field_count()+1);
+            specialFields[static_cast<int>(SpecialFieldNames::v_d_y)],
+            childLookup, desc->field_count()+1);
     tryAddLength(staticVCtrlOut, parent, time,
                  specialFields[static_cast<int>(SpecialFieldNames::v_ctrl_out_f)],
-                 specialFields[static_cast<int>(SpecialFieldNames::v_ctrl_out_f)],
-                 childLookup, desc->field_count()+2);
+            specialFields[static_cast<int>(SpecialFieldNames::v_ctrl_out_f)],
+            childLookup, desc->field_count()+2);
     tryAddLength(staticVGlobal, parent, time,
                  specialFields[static_cast<int>(SpecialFieldNames::v_x)],
-                 specialFields[static_cast<int>(SpecialFieldNames::v_y)],
-                 childLookup, desc->field_count()+3);
+            specialFields[static_cast<int>(SpecialFieldNames::v_y)],
+            childLookup, desc->field_count()+3);
 }
 
 void Plotter::tryAddLength(const std::string &name, const QString &parent, float time, float value1, float value2,
